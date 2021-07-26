@@ -54,11 +54,14 @@ class RegisterController extends Controller
 			if (!$emailExist && !$phoneExist) {
 				try {
 
-					$query = "INSERT INTO porlt_users (fulname, email, phone, password, code, date_t, status) 
-					VALUES(:fname, :email, :phone, :password, :code, :created, :status)";
+					$query = "INSERT INTO porlt_users (fulname, email, phone, password, code, date_t, status, referrer_id) 
+					VALUES(:fname, :email, :phone, :password, :code, :created, :status, :refId)";
 
-					if (isset($input['referrer_code']) && empty($input['referrer_code'])) {
+					if (isset($input['referrer_code']) && !empty($input['referrer_code'])) {
 						$this->populateReferalBonus($input['referrer_code']);
+						$code = $input['referrer_code'];
+						$stm = $this->db->query("SELECT * FROM porlt_users WHERE code = '$code'");
+						$referrer = $stm->fetchObject();
 					}
 
 					$code = substr($input['name'], 0, 2) . uniqid() . substr($input['name'], strlen($input['name']) - 2);
@@ -70,6 +73,7 @@ class RegisterController extends Controller
 						'password' => sha1($input['password']),
 						'code' => $code,
 						'created' => date('Y-m-d'),
+						'refId' => isset($referrer) ? $referrer->id : '',
 						'status' => 'registered']);
 
 					$stm->rowCount();

@@ -23,19 +23,28 @@ class UserController extends \Porlts\App\Controllers\Controller
 		$this->db = $connection;
 	}
 
-	public function processRequest($type = null)
+	public function processRequest($route)
 	{
 		switch ($this->method) {
 			case 'GET':
-				if ($type && $type == 'packages') {
-					$this->getPackages();
-				}
-				else if (!$type) {
-					$this->getProfile();
+
+				if (isset($route[3])) {
+					switch ($route[3]) {
+						case 'packages':
+							$this->getPackages();
+							break;
+
+						case 'referred':
+							$this->getReferred();
+							break;
+						
+						default:
+							$this->routeNotFound();
+							break;
+					}
 				}
 				else {
-					$this->response['body']['status'] = false;
-					$this->response['body']['message'] = 'Route not recognised';
+					$this->getProfile();
 				}
 				break;
 			
@@ -127,5 +136,15 @@ class UserController extends \Porlts\App\Controllers\Controller
 			$this->response['body']['status'] = false;
 			$this->response['body']['message'] = "Nothing to update";
 		}
+	}
+
+	public function getReferred()
+	{
+		$user = $this->auth($this->db);
+
+		$stm = $this->db->query("SELECT * FROM porlt_users WHERE referrer_id = " . $user->id);
+		$this->response['body']['status'] = true;
+		$this->response['body']['message'] = "My referred users";
+		$this->response['body']['data'] = $stm->fetchAll(\PDO::FETCH_OBJ); 
 	}
 }

@@ -30,18 +30,26 @@ class PaymentController extends \Porlts\App\Controllers\Controller
 		switch ($this->method) {
 			case 'POST':
 
-				if (!array_key_exists(3, $route) || empty($route[3])) {
-					$this->makePayment();
+				if (isset($route[3]) && !empty($route[3])) {
+					$this->savePaymentInfo($route[3]);
 				}
 				else {
-					throw new \Exception("Route not found");
+					$this->makePayment();
+				}
+				break;
+
+			case 'GET':
+
+				if (isset($route[3]) && $route[3] == 'keys') {
+					$this->getApiKey();
+				}
+				else {
+					$this->routeNotFound();
 				}
 				break;
 
 			default:
-				$this->response['code'] = $this->methodNotAllowed();
-				$this->response['body']['status'] = false;
-				$this->response['body']['message'] = 'POST Request Method not allowed on this Route';
+				$this->routeNotFound();
 				break;
 		}
 
@@ -109,5 +117,51 @@ class PaymentController extends \Porlts\App\Controllers\Controller
         $seckeyadjustedfirst12 = substr($seckeyadjusted, 0, 12);
 
         return ($seckeyadjustedfirst12 . $hashedkeylast12);
+    }
+
+    public function savePaymentInfo($packageID)
+    {
+
+    	$user = $this->auth($this->db);
+    	$id = $this->getID($packageID);
+
+    	$input = json_decode(file_get_contents("php://input"), true);
+
+    	if (!isset($input['amount']) || empty($input['amount'])) {
+			$this->response['body']['status'] = false;
+			$this->response['body']['message'] = 'Amount is required';
+			return false;
+		}
+		else {
+			$stm = $this->db->query("SELECT * FROM drop_offs WHERE id = $id");
+			$package = $stm->fetchObject();
+			if ($package) {
+				
+				$stm = $this->db->prepare("INSERT INTO payments (user_id, package_id, amount) VALUES (:user, :package, :amount)");
+				$stm->execute([
+					'user' => $user->id,
+					'package' => $package->id,
+					'amount' => $input['amount']]);
+
+				$stm = $this->db->prepare("UPDATE drop_offs SET payment_status = :status WHERE id = :id");
+				$stm->execute([
+					'status' => 'paid',
+					'id' => $id]);
+
+				$this->response['body']['status'] = false;
+				$this->response['body']['message'] = "Payment added Successfully";
+			}
+			else {
+				$this->response['body']['status'] = false;
+				$this->response['body']['message'] = "Package not found";
+			}
+		}
+    }
+
+    private function getApiKey()
+    {
+    	$this->response['body']['status'] = false;
+		$this->response['body']['message'] = "Payment keys";
+		$this->response['body']['data'] = [];
     }
 }

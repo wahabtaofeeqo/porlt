@@ -95,12 +95,7 @@ if ($controller->isAuthenticated()) {
 
 		case 'user':
 			$controller = new UserController($requestMethod, $connection);
-			if (isset($route[3])) {
-				$controller->processRequest($route[3]);
-			}
-			else {
-				$controller->processRequest();
-			}
+			$controller->processRequest($route);
 			break;
 
 		case 'wallets':
@@ -119,8 +114,9 @@ if ($controller->isAuthenticated()) {
 			break;
 		
 		default:
-			header('Content-Type: application/json');
-			echo json_encode(['status' => false, 'message' => 'Route not recognised']);
+			$controller->routeNotFound();
+			// header('Content-Type: application/json');
+			// echo json_encode(['status' => false, 'message' => 'Route not recognised']);
 			break;
 	}
 }

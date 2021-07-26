@@ -29,7 +29,10 @@ class PackageController extends \Porlts\App\Controllers\Controller
 
 			case 'GET':
 
-				if (isset($route[4])) {
+				if (isset($route[5]) && !empty($route[5])) {
+					$this->getPackagesWithConstraints($route[3], $route[4], $route[5]);
+				}
+				elseif (isset($route[4])) {
 
 					switch ($route[4]) {
 						case 'accept':
@@ -71,7 +74,12 @@ class PackageController extends \Porlts\App\Controllers\Controller
 				break;
 			
 			case 'POST':
-				$this->addPackage();
+				if (isset($route[3]) && $route[3] == 'upload') {
+					$this->uploadImage();
+				}
+				else {
+					$this->addPackage();
+				}
 				break;
 
 			case 'PATCH':
@@ -102,22 +110,26 @@ class PackageController extends \Porlts\App\Controllers\Controller
 		$this->sendResponse($this->response);
 	}
 
+	
 	private function addPackage()
 	{
 		$input = json_decode(file_get_contents('php://input'), true);
 		if ($this->validate($input)) {
 			$user = $this->auth($this->db);
 
+			$costTable = ($input['delivery'] == 'inter') ? 'inter_cost' : 'intra_cost';
+			
 			// Determine cost
-			$query = "SELECT * FROM inter_cost WHERE state1 = :destination AND state2 = :origin";
+			$query = "SELECT * FROM $costTable WHERE state1 = :destination AND state2 = :origin";
+
 			$stm = $this->db->prepare($query);
-			$stm->execute(['destination' => $input['pickup_state'], 'origin' => $input['delivery_state']]);
+			$stm->execute(['destination' => $input['origin_city'], 'origin' => $input['des_city']]);
 			$response = $stm->fetchObject();
 
 			if ($response) {
 				$temp = explode("-", $response->kg);
 
-				if (($input['weight'] >= $temp[0]) && ($input['weight'] <= $temp[1])) {
+				if (($input['parcel_weight'] >= $temp[0]) && ($input['parcel_weight'] <= $temp[1])) {
 
 					$query = "INSERT INTO drop_offs (parcel_id, parcel_code, user, delivery, parcel_type, origin_city, des_city, parcel_weight, receiver, receiver_phone, origin_terminal_address, des_terminal_address, amount, delivery_postcode, pickup_postcode) VALUES (:pid, :pcode, :user, :delivery, :ptype, :ocity, :dcity, :size, :receiver, :rphone, :pstop, :dstop, :amount, :dpostcode, :ppostcode)";
 					$stm = $this->db->prepare($query);
@@ -127,14 +139,14 @@ class PackageController extends \Porlts\App\Controllers\Controller
 						'pcode' => uniqid(),
 						'user' => $user->email,
 						'delivery' => $input['delivery'],
-						'ptype' => $input['item_type'],
-						'ocity' => $input['pickup_state'],
-						'dcity' => $input['delivery_state'],
-						'size' => $input['weight'],
-						'receiver' => $input['receiver_name'],
+						'ptype' => $input['parcel_type'],
+						'ocity' => $input['origin_city'],
+						'dcity' => $input['des_city'],
+						'size' => $input['parcel_weight'],
+						'receiver' => $input['receiver'],
 						'rphone' => $input['receiver_phone'],
-						'pstop' => $input['pickup_stop'],
-						'dstop' => $input['delivery_stop'],
+						'pstop' => $input['origin_terminal_address'],
+						'dstop' => $input['des_terminal_address'],
 						'amount' => $response->cost,
 						'dpostcode' => $input['delivery_postcode'],
 						'ppostcode' => $input['pickup_postcode']]);
@@ -151,7 +163,7 @@ class PackageController extends \Porlts\App\Controllers\Controller
 				}
 				else {
 					$this->response['body']['status'] = false;
-					$this->response['body']['message'] = 'Cost could not be determined';
+					$this->response['body']['message'] = 'Cost not available for this Route';
 				}
 			}
 			else {
@@ -163,37 +175,37 @@ class PackageController extends \Porlts\App\Controllers\Controller
 
 	private function validate($input)
 	{
-		if (!isset($input['delivery']) || empty($input['delivery'])) {
+			if (!isset($input['delivery']) || empty($input['delivery'])) {
 			$this->response['body']['status'] = false;
 			$this->response['body']['message'] = 'Delivery Type is required';
 			return false;
 		}
 
-		if (!isset($input['item_type']) || empty($input['item_type'])) {
+		if (!isset($input['parcel_type']) || empty($input['parcel_type'])) {
 			$this->response['body']['status'] = false;
 			$this->response['body']['message'] = 'Item Type is required';
 			return false;
 		}
 
-		if (!isset($input['pickup_state']) || empty($input['pickup_state'])) {
+		if (!isset($input['origin_city']) || empty($input['origin_city'])) {
 			$this->response['body']['status'] = false;
 			$this->response['body']['message'] = 'Pickup State is required';
 			return false;
 		}
 
-		if (!isset($input['delivery_state']) || empty($input['delivery_state'])) {
+		if (!isset($input['des_city']) || empty($input['des_city'])) {
 			$this->response['body']['status'] = false;
-			$this->response['body']['message'] = 'Item Type is required';
+			$this->response['body']['message'] = 'Delivery City is required';
 			return false;
 		}
 
-		if (!isset($input['weight']) || empty($input['weight'])) {
+		if (!isset($input['parcel_weight']) || empty($input['parcel_weight'])) {
 			$this->response['body']['status'] = false;
 			$this->response['body']['message'] = 'Package weight is required';
 			return false;
 		}
 
-		if (!isset($input['receiver_name']) || empty($input['receiver_name'])) {
+		if (!isset($input['receiver']) || empty($input['receiver'])) {
 			$this->response['body']['status'] = false;
 			$this->response['body']['message'] = 'Receiver name is required';
 			return false;
@@ -205,13 +217,13 @@ class PackageController extends \Porlts\App\Controllers\Controller
 			return false;
 		}
 
-		if (!isset($input['pickup_stop']) || empty($input['pickup_stop'])) {
+		if (!isset($input['origin_terminal_address']) || empty($input['origin_terminal_address'])) {
 			$this->response['body']['status'] = false;
 			$this->response['body']['message'] = 'Pickup Bus Stop is required';
 			return false;
 		}
 
-		if (!isset($input['delivery_stop']) || empty($input['delivery_stop'])) {
+		if (!isset($input['des_terminal_address']) || empty($input['des_terminal_address'])) {
 			$this->response['body']['status'] = false;
 			$this->response['body']['message'] = 'Delivery Bus Stop is required';
 			return false;
@@ -349,12 +361,6 @@ class PackageController extends \Porlts\App\Controllers\Controller
 		}
 	}
 
-	private function getID($str)
-	{
-		$id = substr($str, 2); // remove the "Qw"
-		return trim(str_replace("z", "", $id));
-	}
-
 	public function updateTime($str)
 	{
 		$id = $this->getID($str);
@@ -412,8 +418,55 @@ class PackageController extends \Porlts\App\Controllers\Controller
 
 	private function getServiceStates()
 	{
+		$stm = $this->db->query("SELECT * FROM states");
 		$this->response['body']['status'] = true;
 		$this->response['body']['message'] = 'States';
-		$this->response['body']['data'] = [];
+		$this->response['body']['data'] = $stm->fetchAll(\PDO::FETCH_OBJ);
+	}
+
+	private function getPackagesWithConstraints($type, $origin, $destination)
+	{
+
+		$stm = $this->db->prepare("SELECT * FROM drop_offs WHERE delivery = :type AND origin_city = :origin AND des_city = :dest");
+		$stm->execute([
+			'type' => $type,
+			'origin' => $origin,
+			'dest' => $destination]);
+
+		$this->response['body']['status'] = true;
+		$this->response['body']['message'] = 'Packages';
+		$this->response['body']['data'] = $stm->fetchAll(\PDO::FETCH_OBJ);
+	}
+
+	public function uploadImage()
+	{
+
+		$user = $this->auth($this->db);
+		$uploadPath = realpath(dirname(getcwd())) . "\\uploads\\";
+
+		if ($user) {
+			$filename = time() . "_" . basename($_FILES["file"]["name"]);
+			if (move_uploaded_file($_FILES['file']['tmp_name'], ($uploadPath . $filename))) {
+
+				$stm = $this->db->prepare("INSERT INTO packages_image (user_id, package_id, filename) VALUES(:user, :package, :filename)");
+
+				$id = intval($this->getID($_POST['package_id']));
+				$stm->execute([
+					'filename' => $filename, 
+					'user' => $user->id,
+					'package' => $id]);
+
+				$this->response['body']['status'] = true;
+				$this->response['body']['message'] = 'File uploaded successfully';
+			}
+			else {
+				$this->response['body']['status'] = false;
+				$this->response['body']['message'] = 'File not uploaded ';
+			}
+		}
+		else {
+			$this->response['body']['status'] = false;
+			$this->response['body']['message'] = "User not recognised";
+		}
 	}
 }

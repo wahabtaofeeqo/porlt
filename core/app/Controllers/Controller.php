@@ -101,4 +101,10 @@ class Controller
 		$email = $this->isAuthenticated();
 		return $this->checkEmail($db, $email);
 	}
+
+	public function getID($str)
+	{
+		$id = substr($str, 2); // remove the "Qw"
+		return trim(str_replace("z", "", $id));
+	}
 }
