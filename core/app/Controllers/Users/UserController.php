@@ -28,7 +28,10 @@ class UserController extends \Porlts\App\Controllers\Controller
 		switch ($this->method) {
 			case 'GET':
 
-				if (isset($route[3])) {
+				if (isset($route[4]) && !empty($route[4])) {
+					$this->getPackages($route[4]);
+				}
+				elseif (isset($route[3]) && !empty($route[3])) {
 					switch ($route[3]) {
 						case 'packages':
 							$this->getPackages();
@@ -39,7 +42,7 @@ class UserController extends \Porlts\App\Controllers\Controller
 							break;
 						
 						default:
-							$this->routeNotFound();
+							$this->getProfile($route[3]);
 							break;
 					}
 				}
@@ -62,17 +65,33 @@ class UserController extends \Porlts\App\Controllers\Controller
 		$this->sendResponse($this->response);
 	}
 
-	public function getProfile()
+	public function getProfile($id = null)
 	{
-		$this->response['body']['status'] = true;
-		$this->response['body']['message'] = 'Profile';
-		$this->response['body']['data'] = $this->auth($this->db);
+		if ($id) {
+			
+			$stm = $this->db->query("SELECT * FROM porlt_users WHERE id = $id");
+			$user = $stm->fetchObject();
+			$this->response['body']['status'] = true;
+			$this->response['body']['message'] = 'Profile';
+			$this->response['body']['data'] = $user;
+		}
+		else {
+			$this->response['body']['status'] = true;
+			$this->response['body']['message'] = 'Profile';
+			$this->response['body']['data'] = $this->auth($this->db);
+		}
 	}
 
-	public function getPackages()
+	public function getPackages($status = null)
 	{
 		$user = $this->auth($this->db);
-		$stm = $this->db->prepare("SELECT * FROM drop_offs WHERE user = :email");
+		if ($status) {
+			$stm = $this->db->prepare("SELECT * FROM drop_offs WHERE user = :email AND status = '$status'");
+		}
+		else {
+			$stm = $this->db->prepare("SELECT * FROM drop_offs WHERE user = :email AND status != 'delivered'");
+		}
+
 		$stm->execute(['email' => $user->email]);
 
 		$this->response['body']['status'] = true;

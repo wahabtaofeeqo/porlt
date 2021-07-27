@@ -42,8 +42,7 @@ class WalletController extends \Porlts\App\Controllers\Controller
 					$this->withdraw();
 				}
 				else {
-					$this->response['body']['status'] = false;
-					$this->response['body']['message'] = "Route not recognised";
+					$this->routeNotFound();
 				}
 				break;
 

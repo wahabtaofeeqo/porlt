@@ -31,7 +31,15 @@ class PaymentController extends \Porlts\App\Controllers\Controller
 			case 'POST':
 
 				if (isset($route[3]) && !empty($route[3])) {
-					$this->savePaymentInfo($route[3]);
+					switch ($route[3]) {
+						case 'verify':
+							$this->verifyPayment();
+							break;
+						
+						default:
+							$this->savePaymentInfo($route[3]);
+							break;
+					}
 				}
 				else {
 					$this->makePayment();
@@ -119,6 +127,23 @@ class PaymentController extends \Porlts\App\Controllers\Controller
         return ($seckeyadjustedfirst12 . $hashedkeylast12);
     }
 
+    private function validate($input)
+    {
+    	if (!isset($input['amount']) || empty($input['amount'])) {
+			$this->response['body']['status'] = false;
+			$this->response['body']['message'] = 'Amount is required';
+			return false;
+		}
+
+		if (!isset($input['transaction_ref']) || empty($input['transaction_ref'])) {
+			$this->response['body']['status'] = false;
+			$this->response['body']['message'] = 'Transaction Ref is required';
+			return false;
+		}
+
+		return true;
+    }
+
     public function savePaymentInfo($packageID)
     {
 
@@ -127,28 +152,25 @@ class PaymentController extends \Porlts\App\Controllers\Controller
 
     	$input = json_decode(file_get_contents("php://input"), true);
 
-    	if (!isset($input['amount']) || empty($input['amount'])) {
-			$this->response['body']['status'] = false;
-			$this->response['body']['message'] = 'Amount is required';
-			return false;
-		}
-		else {
+    	if ($this->validate($input)) {
+
 			$stm = $this->db->query("SELECT * FROM drop_offs WHERE id = $id");
 			$package = $stm->fetchObject();
 			if ($package) {
 				
-				$stm = $this->db->prepare("INSERT INTO payments (user_id, package_id, amount) VALUES (:user, :package, :amount)");
+				$stm = $this->db->prepare("INSERT INTO payments (user_id, package_id, amount, transaction_ref) VALUES (:user, :package, :amount, :transaction)");
 				$stm->execute([
 					'user' => $user->id,
 					'package' => $package->id,
-					'amount' => $input['amount']]);
+					'amount' => $input['amount'],
+					'transaction' => $input['transaction_ref']]);
 
 				$stm = $this->db->prepare("UPDATE drop_offs SET payment_status = :status WHERE id = :id");
 				$stm->execute([
 					'status' => 'paid',
 					'id' => $id]);
 
-				$this->response['body']['status'] = false;
+				$this->response['body']['status'] = true;
 				$this->response['body']['message'] = "Payment added Successfully";
 			}
 			else {
@@ -162,6 +184,45 @@ class PaymentController extends \Porlts\App\Controllers\Controller
     {
     	$this->response['body']['status'] = false;
 		$this->response['body']['message'] = "Payment keys";
-		$this->response['body']['data'] = [];
+		$this->response['body']['data'] = array(
+			'secret' => $_ENV['WAVE_SECRET_KEY'],
+			'public' => $_ENV['WAVE_PUBLIC_KEY']);
+    }
+
+    private function verifyPayment()
+    {
+    	$input = json_decode(file_get_contents('php://input'), true);
+    	if (isset($input['transaction_ref']) && !empty($input['transaction_ref'])) {
+
+    		$headers = [
+				'Authorization' => 'Bearer ' . $_ENV['WAVE_SECRET_KEY'], 
+				'Content-Type' => 'application/json'
+			];
+
+			$ref = $input['transaction_ref'];
+			$url = "https://api.flutterwave.com/v3/transactions/$ref/verify";
+			$request = new Request(
+				'GET',
+				$url, 
+				$headers
+			);
+
+			try {
+				$client = new Client();
+			    $client->send($request);
+
+			    $this->response['body']['status'] = false;
+				$this->response['body']['message'] = "Payment info";
+				$this->response['body']['data'] = $res;
+			} 
+			catch (\Exception $e) {
+				$this->response['body']['status'] = false;
+				$this->response['body']['message'] = $e->getMessage();
+			}
+    	}
+    	else {
+    		$this->response['body']['status'] = false;
+			$this->response['body']['message'] = "Transaction Ref is required";
+    	}
     }
 }

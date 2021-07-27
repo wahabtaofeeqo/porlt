@@ -116,23 +116,29 @@ class PackageController extends \Porlts\App\Controllers\Controller
 		$input = json_decode(file_get_contents('php://input'), true);
 		if ($this->validate($input)) {
 			$user = $this->auth($this->db);
-
-			$costTable = ($input['delivery'] == 'inter') ? 'inter_cost' : 'intra_cost';
 			
 			// Determine cost
-			$query = "SELECT * FROM $costTable WHERE state1 = :destination AND state2 = :origin";
-
-			$stm = $this->db->prepare($query);
-			$stm->execute(['destination' => $input['origin_city'], 'origin' => $input['des_city']]);
-			$response = $stm->fetchObject();
+			if ($input['delivery'] == 'inter') {
+				$stm = $this->db->prepare("SELECT * FROM 'inter_cost' WHERE state1 = :destination AND state2 = :origin");
+				$stm->execute(['destination' => $input['origin_city'], 'origin' => $input['des_city']]);
+				$response = $stm->fetchObject();
+			}
+			else {
+				$stm = $this->db->prepare("SELECT * FROM intra_cost WHERE origin_post_code = :origin AND destination_post_code = :destination");
+				$stm->execute(['destination' => $input['delivery_postcode'], 'origin' => $input['pickup_postcode']]);
+				$response = $stm->fetchObject();
+			}
 
 			if ($response) {
 				$temp = explode("-", $response->kg);
 
 				if (($input['parcel_weight'] >= $temp[0]) && ($input['parcel_weight'] <= $temp[1])) {
 
-					$query = "INSERT INTO drop_offs (parcel_id, parcel_code, user, delivery, parcel_type, origin_city, des_city, parcel_weight, receiver, receiver_phone, origin_terminal_address, des_terminal_address, amount, delivery_postcode, pickup_postcode) VALUES (:pid, :pcode, :user, :delivery, :ptype, :ocity, :dcity, :size, :receiver, :rphone, :pstop, :dstop, :amount, :dpostcode, :ppostcode)";
+					$query = "INSERT INTO drop_offs (parcel_id, parcel_code, user, delivery, parcel_type, origin_city, des_city, parcel_weight, receiver, receiver_phone, origin_terminal_address, des_terminal_address, amount, delivery_postcode, pickup_postcode, earned, insurance, discount) VALUES (:pid, :pcode, :user, :delivery, :ptype, :ocity, :dcity, :size, :receiver, :rphone, :pstop, :dstop, :amount, :dpostcode, :ppostcode, :earned, :insurance, :discount)";
 					$stm = $this->db->prepare($query);
+
+					// Carrier Fee
+					$earned = $response->earned + ($response->insurance - $response->discount);
 
 					$stm->execute([
 						'pid' => 0,
@@ -149,7 +155,10 @@ class PackageController extends \Porlts\App\Controllers\Controller
 						'dstop' => $input['des_terminal_address'],
 						'amount' => $response->cost,
 						'dpostcode' => $input['delivery_postcode'],
-						'ppostcode' => $input['pickup_postcode']]);
+						'ppostcode' => $input['pickup_postcode'],
+						'earned' => $earned,
+						'insurance' => $response->insurance,
+						'discount' => $response->discount]);
 
 					$id = $this->db->lastInsertId();
 					$parcelID = "Qw" . $id . "z";
@@ -158,8 +167,12 @@ class PackageController extends \Porlts\App\Controllers\Controller
 
 					$this->response['body']['status'] = true;
 					$this->response['body']['message'] = 'Operation succeeded';
-					$this->response['body']['cost'] = $response->cost;
-					$this->response['body']['package_id'] = $parcelID;
+					$this->response['body']['data'] = [
+					    'cost' => $response->cost,
+					    'package_id' => $parcelID,
+					    'insurance' => $response->insurance,
+					    'earned' => $response->earned,
+					    'discount' => $response->discount];
 				}
 				else {
 					$this->response['body']['status'] = false;
@@ -168,7 +181,7 @@ class PackageController extends \Porlts\App\Controllers\Controller
 			}
 			else {
 				$this->response['body']['status'] = false;
-				$this->response['body']['message'] = 'Cost could not be determined';
+				$this->response['body']['message'] = 'Cost could not be determined for this Route';
 			}
 		}
 	}
@@ -275,6 +288,7 @@ class PackageController extends \Porlts\App\Controllers\Controller
 	public function getPackages($str = null)
 	{
 		try {
+			$user = $this->auth($this->db);
 			if ($str) {
 
 				$id = $this->getID($str);
@@ -291,7 +305,8 @@ class PackageController extends \Porlts\App\Controllers\Controller
 				}
 			}
 			else {
-				$stm = $this->db->query("SELECT * FROM drop_offs WHERE status = 'pending'");
+
+				$stm = $this->db->query("SELECT * FROM drop_offs WHERE status = 'pending' AND payment_status = 'paid' AND user != '$user->email'");
 				$this->response['body']['status'] = true;
 				$this->response['body']['message'] = "Packages";
 				$this->response['body']['data'] = $stm->fetchAll(\PDO::FETCH_OBJ);
