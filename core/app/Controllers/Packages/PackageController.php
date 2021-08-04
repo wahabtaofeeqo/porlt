@@ -62,6 +62,10 @@ class PackageController extends \Porlts\App\Controllers\Controller
 						case 'states':
 							$this->getServiceStates();
 							break;
+
+						case 'types':
+							$this->getParcelTypes();
+							break;
 						
 						default:
 							$this->getPackages($route[3]);
@@ -483,5 +487,13 @@ class PackageController extends \Porlts\App\Controllers\Controller
 			$this->response['body']['status'] = false;
 			$this->response['body']['message'] = "User not recognised";
 		}
+	}
+
+	public function getParcelTypes()
+	{
+		$stm = $this->db->query("SELECT * FROM parcel");
+		$this->response['body']['status'] = true;
+		$this->response['body']['message'] = 'Parcel Types';
+		$this->response['body']['data'] = $stm->fetchAll(\PDO::FETCH_OBJ);
 	}
 }

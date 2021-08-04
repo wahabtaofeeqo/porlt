@@ -23,6 +23,7 @@ use Porlts\App\Controllers\Carriers\CarrierController;
 
 // Payment
 use Porlts\App\Controllers\Payments\PaymentController;
+use Porlts\App\Controllers\Payments\TransactionController;
 
 // Routes
 $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
@@ -112,11 +113,14 @@ if ($controller->isAuthenticated()) {
 			$controller = new PaymentController($requestMethod, $connection);
 			$controller->processRequest($route);
 			break;
+
+		case 'transactions':
+			$controller = new TransactionController($requestMethod, $connection);
+			$controller->processRequest($route);
+			break;
 		
 		default:
 			$controller->routeNotFound();
-			// header('Content-Type: application/json');
-			// echo json_encode(['status' => false, 'message' => 'Route not recognised']);
 			break;
 	}
 }
