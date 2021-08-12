@@ -30,7 +30,7 @@ trait EmailHandler {
 		    //Content
 		    $mail->isHTML(true);                                  //Set email format to HTML
 		    $mail->Subject = 'Welcome to Porlts';
-		    $mail->Body    = 'Your account has been created. Your referal code <b> ' . $code . ' </b>';
+		    $mail->Body    = 'Your account has been created. Your verification code is:  <b> ' . $code . ' </b>';
 
 		    $mail->send();
 		    return true;

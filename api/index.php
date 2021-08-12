@@ -8,6 +8,7 @@ use Porlts\App\Controllers\Auth\LoginController;
 use Porlts\App\Controllers\Auth\SetupController;
 use Porlts\App\Controllers\Auth\RegisterController;
 use Porlts\App\Controllers\Auth\ForgotPasswordController;
+use Porlts\App\Controllers\Auth\VerificationController;
 
 // Package Controller
 use Porlts\App\Controllers\Packages\PackageController;
@@ -49,6 +50,11 @@ if (($route[2] == 'auth')) {
 		
 		case 'login':
 			$controller = new LoginController($requestMethod, $connection);
+			$controller->processRequest();
+			break;
+
+		case 'verify':
+			$controller = new VerificationController($requestMethod, $connection);
 			$controller->processRequest();
 			break;
 

@@ -54,8 +54,8 @@ class RegisterController extends Controller
 			if (!$emailExist && !$phoneExist) {
 				try {
 
-					$query = "INSERT INTO porlt_users (fulname, email, phone, password, code, date_t, status, referrer_id) 
-					VALUES(:fname, :email, :phone, :password, :code, :created, :status, :refId)";
+					$query = "INSERT INTO porlt_users (fulname, email, phone, password, code, date_t, status, referrer_id, verification_code) 
+					VALUES(:fname, :email, :phone, :password, :code, :created, :status, :refId, :vCode)";
 
 					if (isset($input['referrer_code']) && !empty($input['referrer_code'])) {
 						$this->populateReferalBonus($input['referrer_code']);
@@ -66,6 +66,8 @@ class RegisterController extends Controller
 
 					$code = substr($input['name'], 0, 2) . uniqid() . substr($input['name'], strlen($input['name']) - 2);
 					$stm = $this->db->prepare($query);
+
+					$vCode = rand();
 					$stm->execute([
 						'fname' => $input['name'],
 						'email' => $input['email'],
@@ -74,12 +76,13 @@ class RegisterController extends Controller
 						'code' => $code,
 						'created' => date('Y-m-d'),
 						'refId' => isset($referrer) ? $referrer->id : '',
-						'status' => 'registered']);
+						'status' => 'registered',
+						'vCode' => $vCode]);
 
 					$stm->rowCount();
 
 					// Send Email
-					$this->welcomeEmail($input['email'], $code);
+					$this->welcomeEmail($input['email'], $vCode);
 
 					$this->response['code'] = $this->statusCreated();
 					$this->response['body']['message'] = "User account created";

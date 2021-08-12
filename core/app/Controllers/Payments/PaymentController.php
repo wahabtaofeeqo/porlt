@@ -158,23 +158,33 @@ class PaymentController extends \Porlts\App\Controllers\Controller
 			$package = $stm->fetchObject();
 			if ($package) {
 				
-				$stm = $this->db->prepare("INSERT INTO payments (user_id, package_id, amount, transaction_ref) VALUES (:user, :package, :amount, :transaction)");
-				$stm->execute([
-					'user' => $user->id,
-					'package' => $package->id,
-					'amount' => $input['amount'],
-					'transaction' => $input['transaction_ref']]);
+				if ($package->amount <= $input['amount']) {
+					$stm = $this->db->prepare("INSERT INTO payments (user_id, package_id, amount, transaction_ref) VALUES (:user, :package, :amount, :transaction)");
+					$stm->execute([
+						'user' => $user->id,
+						'package' => $package->id,
+						'amount' => $input['amount'],
+						'transaction' => $input['transaction_ref']]);
 
-				$stm = $this->db->prepare("UPDATE drop_offs SET payment_status = :status WHERE id = :id");
-				$stm->execute([
-					'status' => 'paid',
-					'id' => $id]);
+					$stm = $this->db->prepare("UPDATE drop_offs SET payment_status = :status WHERE id = :id");
+					$stm->execute([
+						'status' => 'paid',
+						'id' => $id]);
 
-				$this->response['body']['status'] = true;
-				$this->response['body']['message'] = "Payment added Successfully";
+					$this->response['body']['status'] = false;
+					$this->response['body']['message'] = "Payment added Successfully";
+				}
+				else {
+					$this->response['body']['status'] = true;
+					$this->response['body']['message'] = "Amount is less than package amount";
+					$this->response['body']['data'] = [
+						'packageAmount' => $package->amount,
+						'amount' => $input['amount']
+					];
+				}
 			}
 			else {
-				$this->response['body']['status'] = false;
+				$this->response['body']['status'] = true;
 				$this->response['body']['message'] = "Package not found";
 			}
 		}

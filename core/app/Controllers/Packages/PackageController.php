@@ -121,10 +121,15 @@ class PackageController extends \Porlts\App\Controllers\Controller
 		if ($this->validate($input)) {
 			$user = $this->auth($this->db);
 			
+			$response = null;
+
 			// Determine cost
 			if ($input['delivery'] == 'inter') {
-				$stm = $this->db->prepare("SELECT * FROM 'inter_cost' WHERE state1 = :destination AND state2 = :origin");
-				$stm->execute(['destination' => $input['origin_city'], 'origin' => $input['des_city']]);
+				$stm = $this->db->prepare("SELECT * FROM inter_cost WHERE state1 = :origin AND state2 = :dest");
+				$stm->execute([
+					'dest' => $input['des_city'], 
+					'origin' => $input['origin_city']
+				]);
 				$response = $stm->fetchObject();
 			}
 			else {
@@ -137,46 +142,66 @@ class PackageController extends \Porlts\App\Controllers\Controller
 				$temp = explode("-", $response->kg);
 
 				if (($input['parcel_weight'] >= $temp[0]) && ($input['parcel_weight'] <= $temp[1])) {
+					
+					try {
 
-					$query = "INSERT INTO drop_offs (parcel_id, parcel_code, user, delivery, parcel_type, origin_city, des_city, parcel_weight, receiver, receiver_phone, origin_terminal_address, des_terminal_address, amount, delivery_postcode, pickup_postcode, earned, insurance, discount) VALUES (:pid, :pcode, :user, :delivery, :ptype, :ocity, :dcity, :size, :receiver, :rphone, :pstop, :dstop, :amount, :dpostcode, :ppostcode, :earned, :insurance, :discount)";
-					$stm = $this->db->prepare($query);
+						$query = "INSERT INTO drop_offs (parcel_id, parcel_code, user, delivery, parcel_type, origin_city, des_city, parcel_weight, receiver, receiver_phone, origin_terminal_address, des_terminal_address, amount, delivery_postcode, pickup_postcode, earned, insurance, discount, description, worth, origin_house_address, delivery_house_address) VALUES (:pid, :pcode, :user, :delivery, :ptype, :ocity, :dcity, :size, :receiver, :rphone, :pstop, :dstop, :amount, :dpostcode, :ppostcode, :earned, :insurance, :discount, :description, :worth, :oha, :dha)";
 
-					// Carrier Fee
-					$earned = $response->earned + ($response->insurance - $response->discount);
+						$stm = $this->db->prepare($query);
 
-					$stm->execute([
-						'pid' => 0,
-						'pcode' => uniqid(),
-						'user' => $user->email,
-						'delivery' => $input['delivery'],
-						'ptype' => $input['parcel_type'],
-						'ocity' => $input['origin_city'],
-						'dcity' => $input['des_city'],
-						'size' => $input['parcel_weight'],
-						'receiver' => $input['receiver'],
-						'rphone' => $input['receiver_phone'],
-						'pstop' => $input['origin_terminal_address'],
-						'dstop' => $input['des_terminal_address'],
-						'amount' => $response->cost,
-						'dpostcode' => $input['delivery_postcode'],
-						'ppostcode' => $input['pickup_postcode'],
-						'earned' => $earned,
-						'insurance' => $response->insurance,
-						'discount' => $response->discount]);
+						// Carrier Fee
+						$earned = $response->earned + ($response->insurance - $response->discount);
+						$amount = ($response->insurance + $response->cost) - $response->discount;
 
-					$id = $this->db->lastInsertId();
-					$parcelID = "Qw" . $id . "z";
-					$stm = $this->db->prepare("UPDATE drop_offs SET parcel_id = :pid WHERE id = :id");
-					$stm->execute(['pid' => $parcelID, 'id' => $id]);
+						$stm->execute([
+								'pid' => 0,
+								'pcode' => uniqid(),
+								'user' => $user->email,
+								'delivery' => $input['delivery'],
+								'ptype' => $input['parcel_type'],
+								'ocity' => $input['origin_city'],
+								'dcity' => $input['des_city'],
+								'size' => $input['parcel_weight'],
+								'receiver' => $input['receiver'],
+								'rphone' => $input['receiver_phone'],
+								'pstop' => $input['origin_terminal_address'],
+								'dstop' => $input['des_terminal_address'],
+								'amount' => $amount,
+								'dpostcode' => isset($input['delivery_postcode']) ? $input['delivery_postcode'] : '',
+								'ppostcode' => isset($input['pickup_postcode']) ? $input['pickup_postcode'] : '',
+								'earned' => $earned,
+								'insurance' => $response->insurance,
+								'discount' => $response->discount,
+								'description' => isset($input['description']) ? $input['description'] : '',
+								'worth' => isset($input['worth']) ? $input['worth'] : '',
+								'oha' => isset($input['origin_house_address']) ? $input['origin_house_address'] : '',
+								'dha' => isset($input['delivery_house_address']) ? $input['delivery_house_address'] : ''
+							]
+						);
 
-					$this->response['body']['status'] = true;
-					$this->response['body']['message'] = 'Operation succeeded';
-					$this->response['body']['data'] = [
-					    'cost' => $response->cost,
-					    'package_id' => $parcelID,
-					    'insurance' => $response->insurance,
-					    'earned' => $response->earned,
-					    'discount' => $response->discount];
+						$id = $this->db->lastInsertId();
+						if ($id) {
+							$parcelID = "Qw" . $id . "z";
+							$stm = $this->db->prepare("UPDATE drop_offs SET parcel_id = :pid WHERE id = :id");
+							$stm->execute(['pid' => $parcelID, 'id' => $id]);
+
+							$this->response['body']['status'] = true;
+							$this->response['body']['message'] = 'Operation succeeded';
+							$this->response['body']['data'] = [
+							    'cost' => $response->cost,
+							    'package_id' => $parcelID,
+							    'insurance' => $response->insurance,
+							    'earned' => $response->earned,
+							    'discount' => $response->discount];
+						}
+						else {
+							$this->response['body']['status'] = false;
+							$this->response['body']['message'] = 'Package could not be created!';
+						}
+					} 
+					catch (\Exception $e) {
+						throw new \Exception("Error creating package", $e);
+					}
 				}
 				else {
 					$this->response['body']['status'] = false;
@@ -192,10 +217,24 @@ class PackageController extends \Porlts\App\Controllers\Controller
 
 	private function validate($input)
 	{
-			if (!isset($input['delivery']) || empty($input['delivery'])) {
+		if (!isset($input['delivery']) || empty($input['delivery'])) {
 			$this->response['body']['status'] = false;
 			$this->response['body']['message'] = 'Delivery Type is required';
 			return false;
+		}
+
+		if ($input['delivery'] == 'intra') {
+			if (!isset($input['origin_house_address']) || empty($input['origin_house_address'])) {
+				$this->response['body']['status'] = false;
+				$this->response['body']['message'] = 'Origin House is required';
+				return false;
+			}
+
+			if (!isset($input['delivery_house_address']) || empty($input['delivery_house_address'])) {
+				$this->response['body']['status'] = false;
+				$this->response['body']['message'] = 'Delivery House Address is required';
+				return false;
+			}
 		}
 
 		if (!isset($input['parcel_type']) || empty($input['parcel_type'])) {
@@ -245,12 +284,6 @@ class PackageController extends \Porlts\App\Controllers\Controller
 			$this->response['body']['message'] = 'Delivery Bus Stop is required';
 			return false;
 		}
-
-		// if (!isset($input['postcode']) || empty($input['postcode'])) {
-		// 	$this->response['body']['status'] = false;
-		// 	$this->response['body']['message'] = 'Postcode is required';
-		// 	return false;
-		// }
 
 		return true;
 	}
@@ -446,11 +479,17 @@ class PackageController extends \Porlts\App\Controllers\Controller
 	private function getPackagesWithConstraints($type, $origin, $destination)
 	{
 
-		$stm = $this->db->prepare("SELECT * FROM drop_offs WHERE delivery = :type AND origin_city = :origin AND des_city = :dest");
+		$user = $this->auth($this->db);
+		$stm = $this->db->prepare("SELECT * FROM drop_offs WHERE delivery = :type AND origin_city = :origin AND des_city = :dest AND payment_status = :status AND user != :email");
+
 		$stm->execute([
-			'type' => $type,
-			'origin' => $origin,
-			'dest' => $destination]);
+				'type' => $type,
+				'origin' => $origin,
+				'dest' => $destination,
+				'status' => 'paid',
+				'email' => $user->email
+			]
+		);
 
 		$this->response['body']['status'] = true;
 		$this->response['body']['message'] = 'Packages';

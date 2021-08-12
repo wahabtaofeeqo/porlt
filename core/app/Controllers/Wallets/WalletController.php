@@ -88,9 +88,15 @@ class WalletController extends \Porlts\App\Controllers\Controller
 
 			$wallet = $stm->fetchObject();
 			if ($wallet) {
-				$stm = $this->db->prepare("UPDATE wallets SET balance = :balance WHERE id = :id");
-				$balance = intval($input['amount']) + $wallet->balance;
-				$stm->execute(['id' => $wallet->id, 'balance' => $balance]);
+				$stm = $this->db->prepare("UPDATE wallets SET balance = :balance, deposit = :deposit WHERE id = :id");
+				
+				$amount = intval($input['amount']);
+				$stm->execute([
+						'id' => $wallet->id, 
+						'balance' => $wallet->balance + $amount,
+						'deposit' => $wallet->deposit + $amount
+					]
+				);
 
 				$this->response['body']['status'] = true;
 				$this->response['body']['message'] = $input['amount'] ." Naira has been deposited in your wallet";
@@ -110,11 +116,8 @@ class WalletController extends \Porlts\App\Controllers\Controller
 	public function withdraw()
 	{
 		$input = json_decode(file_get_contents('php://input') ,true);
-		if (!isset($input['amount']) || empty($input['amount'])) {
-			$this->response['body']['status'] = false;
-			$this->response['body']['message'] = "Amount is required";
-		}
-		else {
+		
+		if ($this->validate($input)) {
 
 			$user = $this->auth($this->db);
 			$stm = $this->db->prepare("SELECT * FROM wallets WHERE user_id = :id");
@@ -129,11 +132,23 @@ class WalletController extends \Porlts\App\Controllers\Controller
 					$this->response['body']['message'] = "Insufficient Amount";
 				}
 				else {
+
+					// Insert withdraw request
+					$stm = $this->db->prepare("INSERT INTO withdrawal (user, amount, bank, account_num, account_name, status) VALUES (:user, :amount, :bank, :aNum, :aName, :status)");
+					$stm->execute([
+						'user' => $user->email,
+						'amount' => $amount,
+						'bank' => $input['bank_name'],
+						'aNum' => $input['account_number'],
+						'aName' => $input['account_name'],
+						'status' => 'new'
+					]);
+
 					$balance = $wallet->balance - $amount;
 					$stm = $this->db->prepare("UPDATE wallets SET balance = :balance WHERE id = :id");
 					$stm->execute(['balance' => $balance, 'id' => $wallet->id]);
 
-					$this->response['body']['status'] = false;
+					$this->response['body']['status'] = true;
 					$this->response['body']['message'] = $amount . " has been withdrawn from your wallet";
 				}
 			}
@@ -142,5 +157,33 @@ class WalletController extends \Porlts\App\Controllers\Controller
 				$this->response['body']['message'] = "Insufficient Amount";
 			}
 		}
+	}
+
+	private function validate($input) {
+		if (!isset($input['amount']) || empty($input['amount'])) {
+			$this->response['body']['status'] = false;
+			$this->response['body']['message'] = "Amount is required";
+			return false;
+		}
+
+		if (!isset($input['bank_name']) || empty($input['bank_name'])) {
+			$this->response['body']['status'] = false;
+			$this->response['body']['message'] = "Bank Name is required";
+			return false;
+		}
+
+		if (!isset($input['account_name']) || empty($input['account_name'])) {
+			$this->response['body']['status'] = false;
+			$this->response['body']['message'] = "Account Name is required";
+			return false;
+		}
+
+		if (!isset($input['account_number']) || empty($input['account_number'])) {
+			$this->response['body']['status'] = false;
+			$this->response['body']['message'] = "Account Number is required";
+			return false;
+		}
+
+		return true;
 	}
 }
