@@ -31,7 +31,6 @@ $uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 $route = explode('/', $uri);
 $requestMethod = $_SERVER["REQUEST_METHOD"];
 
-
 // API
 if (!array_key_exists(2, $route) || empty($route[2])) {
 	echo json_encode("Welcome to Porlt API. Login and Enjoy!");

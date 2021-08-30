@@ -44,16 +44,18 @@ class SetupController extends \Porlts\App\Controllers\Controller
 	public function upload()
 	{
 
-		$selfiePath = "\\admin\\users\\";
-		$govidPath  = "\\admin\\govt-id\\";
+		$selfiePath = realpath(dirname(getcwd())) . "\\admin\\users\\";
+		$govidPath  = realpath(dirname(getcwd())) . "\\admin\\govt-id\\";
 
-		$uploadPath = realpath(dirname(getcwd())) . (($this->type == 'selfie') ? $selfiePath : $govidPath);
-		$mimes = array("image/jpeg","image/jpg","image/png");
+		$mimes = array("image/jpeg", "image/jpg", "image/png");
 
 		$email = $_POST['email'];
 		$user = $this->checkEmail($this->db, $_POST['email']);
 		if ($user) {
+
 			$filename = time() . "_" . basename($_FILES["file"]["name"]);
+			$uploadPath = ($this->type == 'selfie') ? $selfiePath : $govidPath;
+
 			if (move_uploaded_file($_FILES['file']['tmp_name'], ($uploadPath . $filename))) {
 
 				// Update Table

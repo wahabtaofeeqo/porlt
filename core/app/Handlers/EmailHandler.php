@@ -14,7 +14,7 @@ trait EmailHandler {
 		try {
 			
 		   //Server settings
-		    $mail->SMTPDebug = 3;                     
+		    $mail->SMTPDebug = 0;                     
 		    $mail->isSMTP();                                            
 		    $mail->Host       = $_ENV['EMAIL_HOST'];                     
 		    $mail->Username   = $_ENV['EMAIL_USERNAME'];                     

@@ -171,8 +171,16 @@ class PaymentController extends \Porlts\App\Controllers\Controller
 						'status' => 'paid',
 						'id' => $id]);
 
+					$dCode = rand();
+					$stm = $this->db->prepare("UPDATE drop_offs SET delivery_code = :code WHERE id = :id");
+					$stm->execute([
+						'code' => $dCode,
+						'id' => $package->id]);
+
 					$this->response['body']['status'] = false;
 					$this->response['body']['message'] = "Payment added Successfully";
+					$this->response['body']['data'] = [
+						'deliveryCode' => $dCode];
 				}
 				else {
 					$this->response['body']['status'] = true;

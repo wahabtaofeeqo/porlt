@@ -23,12 +23,11 @@ class PackageController extends \Porlts\App\Controllers\Controller
 		$this->db = $connection;
 	}
 
-	public function processRequest($route)
-	{
+	public function processRequest($route) {
+
 		switch ($this->method) {
 
 			case 'GET':
-
 				if (isset($route[5]) && !empty($route[5])) {
 					$this->getPackagesWithConstraints($route[3], $route[4], $route[5]);
 				}
@@ -80,6 +79,14 @@ class PackageController extends \Porlts\App\Controllers\Controller
 			case 'POST':
 				if (isset($route[3]) && $route[3] == 'upload') {
 					$this->uploadImage();
+				}
+				elseif (isset($route[3]) && $route[4]) {
+					if ($route[4] == 'deliver') {
+						$this->deliverPackage($route[3]);
+					}
+					else {
+						$this->routeNotFound();
+					}
 				}
 				else {
 					$this->addPackage();
@@ -139,9 +146,9 @@ class PackageController extends \Porlts\App\Controllers\Controller
 			}
 
 			if ($response) {
-				$temp = explode("-", $response->kg);
 
-				if (($input['parcel_weight'] >= $temp[0]) && ($input['parcel_weight'] <= $temp[1])) {
+				$temp = explode("-", $response->kg);
+				if ($response) {
 					
 					try {
 
@@ -322,6 +329,69 @@ class PackageController extends \Porlts\App\Controllers\Controller
 		}
 	}
 
+	private function deliverPackageValidate($input) {
+
+		if (!isset($input['status']) || empty($input['status'])) {
+			$this->response['body']['status'] = false;
+			$this->response['body']['message'] = 'Status is required';
+			return false;
+		}
+
+		if (!isset($input['delivery_code']) || empty($input['delivery_code'])) {
+			$this->response['body']['status'] = false;
+			$this->response['body']['message'] = 'Delivery Code is required';
+			return false;
+		}
+
+		return true;
+	}
+
+	private function deliverPackage($str)
+	{
+
+		$id = $this->getID($str);
+		$input = json_decode(file_get_contents('php://input'), true);
+		if ($this->deliverPackageValidate($input)) {
+			
+			if ($input['status'] == 'delivered') {
+				try {
+
+					$code = $input['delivery_code'];
+
+					$stm = $this->db->prepare("SELECT * FROM drop_offs WHERE id = :id AND delivery_code = :code");
+					$stm->execute([
+						'id' => $id,
+						'code' => $code
+					]);
+
+					$package = $stm->fetchObject();
+					if ($package) {
+
+						// Confirm Delivery Code
+
+						$stm = $this->db->prepare("UPDATE drop_offs SET status = :status WHERE id = :id");
+						$stm->execute(['status' => $input['status'], 'id' => $package->id]);
+
+						$this->response['body']['status'] = true;
+						$this->response['body']['message'] = 'Operation succeeded';
+					}
+					else {
+						$this->response['body']['status'] = false;
+						$this->response['body']['message'] = 'Package ID not recognised';
+					}
+				} catch (\PDOException $e) {
+					$this->response['body']['status'] = false;
+					$this->response['body']['message'] = $e->getMessage();
+				}	
+			}
+			else {
+				$this->response['body']['status'] = false;
+				$this->response['body']['message'] = 'Status ' . $input['status'] . ' is not allowed';
+			}
+		}
+	}
+
+
 	public function getPackages($str = null)
 	{
 		try {
@@ -355,6 +425,23 @@ class PackageController extends \Porlts\App\Controllers\Controller
 		}
 	}
 
+	private function checkProfileSetup($user) {
+
+		if (empty($user->pic)) {
+			$this->response['body']['status'] = false;
+			$this->response['body']['message'] = 'Please upload profile picture';
+			return false;
+		}
+
+		if (empty($user->govt_id)) {
+			$this->response['body']['status'] = false;
+			$this->response['body']['message'] = 'Please upload Government ID';
+			return false;
+		}
+
+		return true;
+	}
+
 	public function acceptPackage($str)
 	{
 
@@ -362,19 +449,22 @@ class PackageController extends \Porlts\App\Controllers\Controller
 		$stm = $this->db->query("SELECT * FROM drop_offs WHERE id = $id");
 		$package = $stm->fetchObject();
 
-		if ($package) {
-			$user = $this->auth($this->db);
-			$query = "UPDATE drop_offs SET carrier = :carrier, carrier_id = :email, carrier_phone = :phone, status = :status WHERE id = :id";
+		$user = $this->auth($this->db);
+		
+		if($this->checkProfileSetup($user)) {
+			if ($package) {
+				$query = "UPDATE drop_offs SET carrier = :carrier, carrier_id = :email, carrier_phone = :phone, status = :status WHERE id = :id";
 
-			$stm = $this->db->prepare($query);
-			$stm->execute(['carrier' => $user->fulname, 'email' => $user->email, 'phone' => $user->phone, 'status' => 'picked up', 'id' => $id]);
+				$stm = $this->db->prepare($query);
+				$stm->execute(['carrier' => $user->fulname, 'email' => $user->email, 'phone' => $user->phone, 'status' => 'picked up', 'id' => $id]);
 
-			$this->response['body']['status'] = true;
-			$this->response['body']['message'] = "Package accepted";
-		}
-		else {
-			$this->response['body']['status'] = false;
-			$this->response['body']['message'] = "Package is not found";
+				$this->response['body']['status'] = true;
+				$this->response['body']['message'] = "Package accepted";
+			}
+			else {
+				$this->response['body']['status'] = false;
+				$this->response['body']['message'] = "Package is not found";
+			}
 		}
 	}
 
@@ -480,14 +570,15 @@ class PackageController extends \Porlts\App\Controllers\Controller
 	{
 
 		$user = $this->auth($this->db);
-		$stm = $this->db->prepare("SELECT * FROM drop_offs WHERE delivery = :type AND origin_city = :origin AND des_city = :dest AND payment_status = :status AND user != :email");
+		$stm = $this->db->prepare("SELECT * FROM drop_offs WHERE delivery = :type AND origin_city = :origin AND des_city = :dest AND payment_status = :pStatus AND user != :email AND status = :status");
 
 		$stm->execute([
 				'type' => $type,
 				'origin' => $origin,
 				'dest' => $destination,
-				'status' => 'paid',
-				'email' => $user->email
+				'pStatus' => 'paid',
+				'email' => $user->email,
+				'status' => 'pending'
 			]
 		);
 
@@ -498,7 +589,6 @@ class PackageController extends \Porlts\App\Controllers\Controller
 
 	public function uploadImage()
 	{
-
 		$user = $this->auth($this->db);
 		$uploadPath = realpath(dirname(getcwd())) . "\\uploads\\";
 
