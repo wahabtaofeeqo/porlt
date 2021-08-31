@@ -52,9 +52,9 @@ class LoginController extends \Porlts\App\Controllers\Controller
 				$user = $stm->fetchObject();
 
 				if ($user) {
-					if (strtolower($user->status) != 'verified') {
+					if (!$user->email_verified) {
 						$this->response['body']['status'] = true;
-						$this->response['body']['message'] = "Your account has not been verified";
+						$this->response['body']['message'] = "Your Email has not been verified";
 						$this->response['body']['verification_status'] = $user->status;
 					}
 					else {

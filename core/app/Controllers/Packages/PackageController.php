@@ -125,8 +125,9 @@ class PackageController extends \Porlts\App\Controllers\Controller
 	private function addPackage()
 	{
 		$input = json_decode(file_get_contents('php://input'), true);
-		if ($this->validate($input)) {
-			$user = $this->auth($this->db);
+		$user = $this->auth($this->db);
+
+		if ($this->validate($input, $user)) {
 			
 			$response = null;
 
@@ -222,8 +223,15 @@ class PackageController extends \Porlts\App\Controllers\Controller
 		}
 	}
 
-	private function validate($input)
+	private function validate($input, $user)
 	{
+
+		if (empty(strtolower($user->status) != 'verified')) {
+			$this->response['body']['status'] = false;
+			$this->response['body']['message'] = 'You account has not been verified';
+			return false;
+		}
+
 		if (!isset($input['delivery']) || empty($input['delivery'])) {
 			$this->response['body']['status'] = false;
 			$this->response['body']['message'] = 'Delivery Type is required';
@@ -368,9 +376,40 @@ class PackageController extends \Porlts\App\Controllers\Controller
 					if ($package) {
 
 						// Confirm Delivery Code
-
 						$stm = $this->db->prepare("UPDATE drop_offs SET status = :status WHERE id = :id");
 						$stm->execute(['status' => $input['status'], 'id' => $package->id]);
+
+						// Add Carrier Earning
+						$user = $this->auth($this->db);
+						$stm = $this->db->query("SELECT * FROM wallets WHERE user_id = $user->id");
+						$wallet = $stm->fetchObject();
+						if($wallet) {
+
+							$stm = $this->db->prepare("UPDATE wallets SET balance = :balance, earnings = :earned WHERE id = :id");
+							$stm->execute([
+								'balance' => $wallet->balance + $package->earned,
+								'earned' => $wallet->earnings + $package->earned,
+								'id' => $wallet->id]);
+						}
+						else {
+
+							// If User has no entry
+							// in wallets Table
+							$stm = $this->db->prepare("INSERT INTO wallets (user_id, balance, earnings, bonus, deposit) VALUES (:user, :balance, :earned, :bonus, :deposit)");
+							$stm->execute([
+								'user' => $user->id,
+								'balance' => $package->earned,
+								'earned' => $package->earned,
+								'bonus' => 0,
+								'deposit' => 0]);
+						}
+
+						// Transaction History
+						$stm = $this->db->prepare("INSERT INTO transactions (user_id, type, amount) VALUES (:user, :type, :amount)");
+						$stm->execute([
+							'user' => $user->id,
+							'type' => 'credit',
+							'amount' => $package->earned]);
 
 						$this->response['body']['status'] = true;
 						$this->response['body']['message'] = 'Operation succeeded';
@@ -427,18 +466,11 @@ class PackageController extends \Porlts\App\Controllers\Controller
 
 	private function checkProfileSetup($user) {
 
-		if (empty($user->pic)) {
+		if (empty(strtolower($user->status) != 'verified')) {
 			$this->response['body']['status'] = false;
-			$this->response['body']['message'] = 'Please upload profile picture';
+			$this->response['body']['message'] = 'You account has been verified';
 			return false;
 		}
-
-		if (empty($user->govt_id)) {
-			$this->response['body']['status'] = false;
-			$this->response['body']['message'] = 'Please upload Government ID';
-			return false;
-		}
-
 		return true;
 	}
 
@@ -590,7 +622,7 @@ class PackageController extends \Porlts\App\Controllers\Controller
 	public function uploadImage()
 	{
 		$user = $this->auth($this->db);
-		$uploadPath = realpath(dirname(getcwd())) . "\\uploads\\";
+		$uploadPath = SITE_ROOT . "/uploads/packages/";
 
 		if ($user) {
 			$filename = time() . "_" . basename($_FILES["file"]["name"]);

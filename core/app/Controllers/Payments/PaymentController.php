@@ -159,6 +159,8 @@ class PaymentController extends \Porlts\App\Controllers\Controller
 			if ($package) {
 				
 				if ($package->amount <= $input['amount']) {
+
+					// Payment Info
 					$stm = $this->db->prepare("INSERT INTO payments (user_id, package_id, amount, transaction_ref) VALUES (:user, :package, :amount, :transaction)");
 					$stm->execute([
 						'user' => $user->id,
@@ -166,18 +168,29 @@ class PaymentController extends \Porlts\App\Controllers\Controller
 						'amount' => $input['amount'],
 						'transaction' => $input['transaction_ref']]);
 
-					$stm = $this->db->prepare("UPDATE drop_offs SET payment_status = :status WHERE id = :id");
+					// Transaction History
+						$stm = $this->db->prepare("INSERT INTO transactions (user_id, type, amount) VALUES (:user, :type, :amount)");
+						$stm->execute([
+							'user' => $user->id,
+							'type' => 'package-payment',
+							'amount' => $input['amount'],
+						]);
+
+					// Updates
+					$dCode = rand();
+					$stm = $this->db->prepare("UPDATE drop_offs SET payment_status = :status, code = :code WHERE id = :id");
 					$stm->execute([
 						'status' => 'paid',
+						'code' => $vCode,
 						'id' => $id]);
 
-					$dCode = rand();
-					$stm = $this->db->prepare("UPDATE drop_offs SET delivery_code = :code WHERE id = :id");
-					$stm->execute([
-						'code' => $dCode,
-						'id' => $package->id]);
+					
+					// $stm = $this->db->prepare("UPDATE drop_offs SET delivery_code = :code WHERE id = :id");
+					// $stm->execute([
+					// 	'code' => $dCode,
+					// 	'id' => $package->id]);
 
-					$this->response['body']['status'] = false;
+					$this->response['body']['status'] = true;
 					$this->response['body']['message'] = "Payment added Successfully";
 					$this->response['body']['data'] = [
 						'deliveryCode' => $dCode];

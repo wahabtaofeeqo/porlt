@@ -44,8 +44,8 @@ class SetupController extends \Porlts\App\Controllers\Controller
 	public function upload()
 	{
 
-		$selfiePath = realpath(dirname(getcwd())) . "\\admin\\users\\";
-		$govidPath  = realpath(dirname(getcwd())) . "\\admin\\govt-id\\";
+		$selfiePath = SITE_ROOT . "/uploads/users/";
+		$govidPath  = SITE_ROOT . "/uploads/govids/";
 
 		$mimes = array("image/jpeg", "image/jpg", "image/png");
 

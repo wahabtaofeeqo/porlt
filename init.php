@@ -1,6 +1,8 @@
 <?php 
 require 'vendor/autoload.php';
 
+define ('SITE_ROOT', realpath(dirname(__FILE__)));
+
 use Porlts\App\Database;
 
 $dotenv = new Dotenv\Dotenv(__DIR__);

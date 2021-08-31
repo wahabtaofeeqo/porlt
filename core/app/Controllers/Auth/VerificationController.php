@@ -49,13 +49,13 @@ class VerificationController extends \Porlts\App\Controllers\Controller
 
 				if ($user) {
 					if ($user->verification_code == $input['code']) {
-						$stm = $this->db->prepare("UPDATE porlt_users SET status = :status WHERE id = :id");
+						$stm = $this->db->prepare("UPDATE porlt_users SET email_verified = :status WHERE id = :id");
 						$stm->execute([
-							'status' => 'verified',
+							'status' => true,
 							'id' => $user->id]);
 
 						$this->response['body']['status'] = true;
-						$this->response['body']['message'] = "Your account has been verified";
+						$this->response['body']['message'] = "Your Email has been verified";
 					}
 					else {
 						$this->response['body']['status'] = false;
