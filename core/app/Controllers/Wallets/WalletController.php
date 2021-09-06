@@ -144,12 +144,12 @@ class WalletController extends \Porlts\App\Controllers\Controller
 						'status' => 'new'
 					]);
 
-					$balance = $wallet->balance - $amount;
-					$stm = $this->db->prepare("UPDATE wallets SET balance = :balance WHERE id = :id");
-					$stm->execute(['balance' => $balance, 'id' => $wallet->id]);
+					// $balance = $wallet->balance - $amount;
+					// $stm = $this->db->prepare("UPDATE wallets SET balance = :balance WHERE id = :id");
+					// $stm->execute(['balance' => $balance, 'id' => $wallet->id]);
 
 					$this->response['body']['status'] = true;
-					$this->response['body']['message'] = $amount . " has been withdrawn from your wallet";
+					$this->response['body']['message'] = "Withdrawal request of " .$amount . " has been sent.";
 				}
 			}
 			else {

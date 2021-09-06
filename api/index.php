@@ -132,5 +132,5 @@ if ($controller->isAuthenticated()) {
 else {
 	http_response_code($controller->notAuthorized());
 	header('Content-Type: application/json');
-	echo json_encode(['status' => false, 'message' => 'Unauthorized']);
+	echo json_encode(['status' => false, 'message' => 'Unauthorized 1']);
 }
