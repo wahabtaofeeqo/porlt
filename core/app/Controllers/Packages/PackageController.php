@@ -333,8 +333,19 @@ class PackageController extends \Porlts\App\Controllers\Controller
 				$package = $stm->fetchObject();
 
 				if ($package) {
-					$stm = $this->db->prepare("UPDATE drop_offs SET status = :status WHERE id = :id");
-					$stm->execute(['status' => $input['status'], 'id' => $package->id]);
+
+					if($input['status'] == 'picked up') {
+						$stm = $this->db->prepare("UPDATE drop_offs SET status = :status, pickup_date = :pDate WHERE id = :id");
+						$stm->execute([
+							'status' => $input['status'], 
+							'id' => $package->id,
+							'pDate' => date('Y-m-d h:i:sa')
+						]);
+					}
+					else {
+						$stm = $this->db->prepare("UPDATE drop_offs SET status = :status WHERE id = :id");
+						$stm->execute(['status' => $input['status'], 'id' => $package->id]);
+					}
 
 					$this->response['body']['status'] = true;
 					$this->response['body']['message'] = 'Operation succeeded';
@@ -391,45 +402,55 @@ class PackageController extends \Porlts\App\Controllers\Controller
 
 					$package = $stm->fetchObject();
 					if ($package) {
+						if ($package->status != 'delivered') {
+							
+							// Confirm Delivery Code
+							$stm = $this->db->prepare("UPDATE drop_offs SET status = :status, delivery_date = :dDate WHERE id = :id");
 
-						// Confirm Delivery Code
-						$stm = $this->db->prepare("UPDATE drop_offs SET status = :status WHERE id = :id");
-						$stm->execute(['status' => $input['status'], 'id' => $package->id]);
-
-						// Add Carrier Earning
-						$user = $this->auth($this->db);
-						$stm = $this->db->query("SELECT * FROM wallets WHERE user_id = $user->id");
-						$wallet = $stm->fetchObject();
-						if($wallet) {
-
-							$stm = $this->db->prepare("UPDATE wallets SET balance = :balance, earnings = :earned WHERE id = :id");
 							$stm->execute([
-								'balance' => $wallet->balance + $package->earned,
-								'earned' => $wallet->earnings + $package->earned,
-								'id' => $wallet->id]);
-						}
-						else {
+								'status' => $input['status'], 
+								'id' => $package->id,
+								'dDate' => date('Y-m-d H:i:s')]);
 
-							// If User has no entry
-							// in wallets Table
-							$stm = $this->db->prepare("INSERT INTO wallets (user_id, balance, earnings, bonus, deposit) VALUES (:user, :balance, :earned, :bonus, :deposit)");
+							// Add Carrier Earning
+							$user = $this->auth($this->db);
+							$stm = $this->db->query("SELECT * FROM wallets WHERE user_id = $user->id");
+							$wallet = $stm->fetchObject();
+							if($wallet) {
+
+								$stm = $this->db->prepare("UPDATE wallets SET balance = :balance, earnings = :earned WHERE id = :id");
+								$stm->execute([
+									'balance' => $wallet->balance + $package->earned,
+									'earned' => $wallet->earnings + $package->earned,
+									'id' => $wallet->id]);
+							}
+							else {
+
+								// If User has no entry
+								// in wallets Table
+								$stm = $this->db->prepare("INSERT INTO wallets (user_id, balance, earnings, bonus, deposit) VALUES (:user, :balance, :earned, :bonus, :deposit)");
+								$stm->execute([
+									'user' => $user->id,
+									'balance' => $package->earned,
+									'earned' => $package->earned,
+									'bonus' => 0,
+									'deposit' => 0]);
+							}
+
+							// Transaction History
+							$stm = $this->db->prepare("INSERT INTO transactions (user_id, type, amount) VALUES (:user, :type, :amount)");
 							$stm->execute([
 								'user' => $user->id,
-								'balance' => $package->earned,
-								'earned' => $package->earned,
-								'bonus' => 0,
-								'deposit' => 0]);
+								'type' => 'credit',
+								'amount' => $package->earned]);
+
+							$this->response['body']['status'] = true;
+							$this->response['body']['message'] = 'Operation succeeded';
 						}
-
-						// Transaction History
-						$stm = $this->db->prepare("INSERT INTO transactions (user_id, type, amount) VALUES (:user, :type, :amount)");
-						$stm->execute([
-							'user' => $user->id,
-							'type' => 'credit',
-							'amount' => $package->earned]);
-
-						$this->response['body']['status'] = true;
-						$this->response['body']['message'] = 'Operation succeeded';
+						else {
+							$this->response['body']['status'] = false;
+							$this->response['body']['message'] = 'Package has been previously delivered';
+						}
 					}
 					else {
 						$this->response['body']['status'] = false;

@@ -184,6 +184,9 @@ class PaymentController extends \Porlts\App\Controllers\Controller
 						'code' => $dCode,
 						'id' => $id]);
 
+					// Referrer
+					$this->handleReferralBonus($user);
+
 					$this->response['body']['status'] = true;
 					$this->response['body']['message'] = "Payment added Successfully";
 					$this->response['body']['data'] = [
@@ -248,6 +251,57 @@ class PaymentController extends \Porlts\App\Controllers\Controller
     	else {
     		$this->response['body']['status'] = false;
 			$this->response['body']['message'] = "Transaction Ref is required";
+    	}
+    }
+
+    public function handleReferralBonus($user)
+    {
+    	try {
+    		$stm = $this->db->query("SELECT * FROM referral_bonus");
+		    $bonus = $stm->fetchObject();
+
+			if($user->referrer_id && !$user->referrer_paid) {
+
+				$stm = $this->db->query("SELECT * FROM porlt_users WHERE id = $user->referrer_id");
+				$referrer = $stm->fetchObject();
+
+				if ($referrer) {
+					
+					$stm = $this->db->prepare("SELECT * FROM wallets WHERE user_id = :user");
+					$stm->execute([
+						'user' => $user->id]);
+					$wallet = $stm->fetchObject();
+
+					// Add Bonus to wallet
+					$stm = $this->db->prepare("UPDATE wallets SET balance = :balance, bonus = :bonus WHERE id = :id");
+					$stm->execute([
+						'balance' => $wallet->balance + $bonus->amount,
+						'bonus' => $wallet->bonus + $bonus->amount,
+						'id' => $wallet->id]);
+
+					// Update User
+					$stm = $this->db->prepare("UPDATE porlt_users SET referrer_paid = :status WHERE id = :id");
+					$stm->execute([
+						'status' => true,
+						'id' => $user->id]);
+
+					// Transaction
+					$stm = $this->db->prepare("INSERT INTO transactions (user_id, type, amount) VALUES (:user, :type, :amount)");
+					$stm->execute([
+							'type' => 'bonus credit',
+							'user' => $user->referrer_id,
+							'amount' => $bonus->amount]);
+
+					// Email
+					$message = "<p>Dear Porlt user, we are glad to inform you that one of your referrals $user->fullname has earned you NGN $bonus->amount </p>";
+					$message .= "<p>Thank you for using Porlt. Refer more friends to earn more referral bonus.</p><br><br><br>";
+					$message .= "<p><b>Porlt</b>  Where senders meet travelers! </p>";
+						
+					$this->sendEmail($referrer->email, 'Bonus Alert', $message);
+				}
+			}
+    	} catch (\Exception $e) {
+    		
     	}
     }
 }

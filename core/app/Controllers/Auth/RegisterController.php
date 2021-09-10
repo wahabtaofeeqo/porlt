@@ -58,7 +58,6 @@ class RegisterController extends Controller
 					VALUES(:fname, :email, :phone, :password, :code, :created, :status, :refId, :vCode)";
 
 					if (isset($input['referrer_code']) && !empty($input['referrer_code'])) {
-						$this->populateReferalBonus($input['referrer_code']);
 						$code = $input['referrer_code'];
 						$stm = $this->db->query("SELECT * FROM porlt_users WHERE code = '$code'");
 						$referrer = $stm->fetchObject();
@@ -75,7 +74,7 @@ class RegisterController extends Controller
 						'password' => sha1($input['password']),
 						'code' => $code,
 						'created' => date('Y-m-d'),
-						'refId' => isset($referrer) ? $referrer->id : '',
+						'refId' => isset($referrer) ? $referrer->id : 0,
 						'status' => 'registered',
 						'vCode' => $vCode]);
 
@@ -83,6 +82,9 @@ class RegisterController extends Controller
 
 					// Send Email
 					$this->welcomeEmail($input['email'], $vCode);
+
+					// Wallet
+					$this->createWallet($this->db->lastInsertId());
 
 					$this->response['code'] = $this->statusCreated();
 					$this->response['body']['message'] = "User account created";
@@ -125,8 +127,11 @@ class RegisterController extends Controller
 		return true;
 	}
 
-	public function populateReferalBonus($code)
+	public function createWallet($id)
 	{
-		
+		$stm = $this->db->prepare("INSERT INTO wallets (user_id, balance) VALUES (:user, :balance)");
+		$stm->execute([
+			'user' => $id,
+			'balance' => 0]);
 	}
 }
