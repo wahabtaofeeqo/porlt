@@ -645,7 +645,7 @@ class PackageController extends \Porlts\App\Controllers\Controller
 
 		$stm->execute([
 				'type' => $type,
-				'origin' => $origin,
+				'origin' => urldecode($origin),
 				'dest' => $destination,
 				'pStatus' => 'paid',
 				'email' => $user->email,

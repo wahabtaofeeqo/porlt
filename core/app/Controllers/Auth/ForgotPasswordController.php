@@ -55,7 +55,7 @@ class ForgotPasswordController extends \Porlts\App\Controllers\Controller
 			$user = $this->checkEmail($this->db, $input['email']);
 			if ($user) {
 
-				$code = 1235;
+				$code = substr(mt_rand(), 0, 4);
 				if ($this->sendResetCode($user->email, $code)) {
 
 					$query = "INSERT INTO resets (email, code) VALUES (:email, :code)";

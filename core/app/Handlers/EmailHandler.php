@@ -24,7 +24,7 @@ trait EmailHandler {
 		    $mail->Port       = 587;
 
 		    //Recipients
-		    $mail->setFrom($_ENV['EMAIL_FROM'], 'Porlts');
+		    $mail->setFrom($_ENV['EMAIL_FROM'], 'Porlt');
 		    $mail->addAddress($email);     //Add a recipient
 
 		    //Content
@@ -38,15 +38,46 @@ trait EmailHandler {
 		    return false;
 		}
 	}
+	
+	public function sendTestEmail()
+	{
+		$mail = new PHPMailer(true);
+		try {
+			
+		   //Server settings
+		    $mail->SMTPDebug = 0;                     
+		    $mail->isSMTP();                                            
+		    $mail->Host       = $_ENV['EMAIL_HOST'];      
+		    $mail->Username   = $_ENV['EMAIL_USERNAME'];
+		    $mail->Password   = $_ENV['EMAIL_PASSWORD'];                              
+		    $mail->SMTPAuth   = true;                                  
+		    $mail->SMTPSecure = 'tls';            
+		    $mail->Port = 587;
 
-	public function send($data)
+		    //Recipients
+		    $mail->setFrom($_ENV['EMAIL_FROM'], 'Porlt'); //
+		    $mail->addAddress('taofeekolamilekan218@gmail.com');     //Add a recipient
+
+		    //Content
+		    $mail->isHTML(true);                                  //Set email format to HTML
+		    $mail->Subject = 'Welcome to Porlt';
+		    $mail->Body    = '<h4> Testing 124 </h4>';
+
+		    $mail->send();
+		    return true;
+		} catch (Exception $e) {
+		    return false;
+		}
+	}
+	
+	public function sendEmail($email, $subject, $message)
 	{
 		
 		$mail = new PHPMailer(true);
 		try {
 
 		    //Server settings
-		    $mail->SMTPDebug = 3;                     
+		    $mail->SMTPDebug = 0;                     
 		    $mail->isSMTP();                                            
 		    $mail->Host       = $_ENV['EMAIL_HOST'];                     
 		    $mail->Username   = $_ENV['EMAIL_USERNAME'];                     
@@ -56,13 +87,13 @@ trait EmailHandler {
 		    $mail->Port       = 587;                                    
 
 		    //Recipients
-		    $mail->setFrom($_ENV['EMAIL_FROM'], 'Porlts');
-		    $mail->addAddress($data['email']);     //Add a recipient
+		    $mail->setFrom($_ENV['EMAIL_FROM'], 'Porlt');
+		    $mail->addAddress($email);     //Add a recipient
 	
 		    //Content
 		    $mail->isHTML(true);                                 
-		    $mail->Subject = 'Password Reset';
-		    $mail->Body    = 'Your reset code is: <b>' . $data['code'] . '</b>';
+		    $mail->Subject = $subject;
+		    $mail->Body    = $message;
 
 		    $mail->send();
 		    return true;
@@ -73,7 +104,7 @@ trait EmailHandler {
 
 	public function sendResetCode($email, $code)
 	{
-		return $this->send(['email' => $email, 'code' => $code]);
+	    $message = 'Your reset code is: <b>' . $code . '</b>';
+		return $this->sendEmail($email, 'Password Reset', $message);
 	}
 }
-
